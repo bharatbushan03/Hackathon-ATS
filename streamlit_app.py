@@ -11,8 +11,8 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
 CRITERIA = ["problem_clarity", "innovation", "technical_depth", "completeness",
             "impact_viability", "presentation_quality"]
 
-st.set_page_config(page_title="AI Hackathon Evaluator", layout="wide")
-st.title("AI Hackathon Evaluator")
+st.set_page_config(page_title="AI Evaluator", layout="wide")
+st.title("AI Evaluator")
 st.markdown(
     "Upload a ZIP or provide a Google Drive folder link containing hackathon submissions (`.pptx` and `.pdf`). "
     "Each document is scored independently by three specialist agents "
