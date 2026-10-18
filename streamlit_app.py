@@ -135,11 +135,12 @@ if start_zip or start_drive:
     if job["status"] == "failed":
         status.error(f"Job failed: {job['error']}")
     else:
-        status.success(f"Done. {len(job['results'])} item(s) processed.")
         st.session_state.final = job
         st.session_state.report = requests.get(f"{API_URL}/jobs/{job['job_id']}/report", timeout=60).content
+        st.rerun()  # re-render so the sidebar graph counts reflect this run
 
 if st.session_state.final:
+    st.success(f"Done. {len(st.session_state.final['results'])} item(s) processed.")
     show_results(st.session_state.final)
     if st.session_state.report:
         st.download_button(
