@@ -103,9 +103,7 @@ def show_results(job: dict) -> None:
                 if r["evidence_checked"]:
                     st.caption(f"Evidence quotes verified in document: {r['evidence_verified']}/{r['evidence_checked']}")
                 if r.get("adjustments"):
-                    st.warning("**Strict scoring adjustments**
-" + "
-".join(f"- {x}" for x in r["adjustments"]))
+                    st.warning("**Strict scoring adjustments**\n" + "\n".join(f"- {x}" for x in r["adjustments"]))
             for e in r["errors"]:
                 st.error(e)
 
