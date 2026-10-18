@@ -106,10 +106,14 @@ def _items(folder_id: str, resource_key: str | None, api_key: str):
                 break
 
 
-def create_folder_zip(folder_url: str, zip_path: Path, settings: Settings) -> Path:
-    """Download every supported document in a public Drive folder tree into a ZIP."""
-    if not settings.google_drive_api_key:
-        raise IngestionError("Set GOOGLE_DRIVE_API_KEY to enable Google Drive folder evaluation.")
+def create_folder_zip(folder_url: str, zip_path: Path, settings: Settings, api_key: str = "") -> Path:
+    """Download every supported document in a public Drive folder tree into a ZIP.
+
+    `api_key` is the uploader's own Google Drive API key; it falls back to GOOGLE_DRIVE_API_KEY.
+    """
+    api_key = (api_key or settings.google_drive_api_key or "").strip()
+    if not api_key:
+        raise IngestionError("A Google Drive API key is required to evaluate a Drive folder.")
     folder_id, resource_key = parse_folder_url(folder_url)
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,7 +122,7 @@ def create_folder_zip(folder_url: str, zip_path: Path, settings: Settings) -> Pa
 
     try:
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for item, archive_name in _items(folder_id, resource_key, settings.google_drive_api_key):
+            for item, archive_name in _items(folder_id, resource_key, api_key):
                 count += 1
                 if count > settings.max_files:
                     raise IngestionError(f"Drive folder contains more than the {settings.max_files} file limit.")
@@ -133,7 +137,7 @@ def create_folder_zip(folder_url: str, zip_path: Path, settings: Settings) -> Pa
                     params = {"alt": "media"}
                 key = item.get("resourceKey")
                 response = _request(
-                    url, params, settings.google_drive_api_key, key, file_id, stream=True
+                    url, params, api_key, key, file_id, stream=True
                 )
                 display = archive_name
                 if Path(display).suffix.lower() != suffix:

@@ -60,8 +60,12 @@ with zip_tab:
     start_zip = st.button("Evaluate ZIP", type="primary", disabled=upload is None)
 with drive_tab:
     drive_url = st.text_input("Google Drive folder URL", placeholder="https://drive.google.com/drive/folders/…")
-    st.caption("The folder must be shared as ‘Anyone with the link’. The backend also needs GOOGLE_DRIVE_API_KEY.")
-    start_drive = st.button("Evaluate Drive folder", type="primary", disabled=not drive_url.strip())
+    drive_key = st.text_input("Your Google Drive API key", type="password",
+                              help="Create one in Google Cloud with the Drive API enabled. "
+                                   "It is sent to the evaluator only for this job and is not stored.")
+    st.caption("The folder must be shared as ‘Anyone with the link’ (Viewer).")
+    start_drive = st.button("Evaluate Drive folder", type="primary",
+                            disabled=not (drive_url.strip() and drive_key.strip()))
 
 
 def results_table(results: list[dict]) -> pd.DataFrame:
@@ -112,7 +116,8 @@ if start_zip or start_drive:
                 timeout=120,
             )
         else:
-            resp = requests.post(f"{API_URL}/jobs/drive", json={"folder_url": drive_url.strip()}, timeout=30)
+            resp = requests.post(f"{API_URL}/jobs/drive", json={"folder_url": drive_url.strip(), "api_key": drive_key.strip()},
+                                 timeout=30)
         resp.raise_for_status()
         st.session_state.job_id = resp.json()["job_id"]
     except requests.HTTPError as e:
