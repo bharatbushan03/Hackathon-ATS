@@ -145,6 +145,7 @@ class GraphStore:
             "project_title: $project_title, total_score: $total_score, verdict: $verdict, summary: $summary, "
             "char_count: $char_count, truncated: $truncated, elapsed_seconds: $elapsed_seconds, "
             "evidence_checked: $evidence_checked, evidence_verified: $evidence_verified, errors: $errors, "
+            "adjustments: $adjustments, "
             "evaluated_at: $now}) "
             "CREATE (run)-[:EVALUATED]->(s)",
             {
@@ -153,6 +154,7 @@ class GraphStore:
                 "verdict": r.verdict, "summary": r.summary, "char_count": r.char_count, "truncated": r.truncated,
                 "elapsed_seconds": r.elapsed_seconds, "evidence_checked": r.evidence_checked,
                 "evidence_verified": r.evidence_verified, "errors": list(r.errors),
+                "adjustments": list(r.adjustments),
             },
         )
         if r.project_title and r.project_title.lower() != "unknown":

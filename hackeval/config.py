@@ -45,6 +45,8 @@ class Settings:
     api_url: str
     falkordb_url: str = ""
     falkordb_graph: str = "hackeval"
+    strict_scoring: bool = True
+    strict_min_chars: int = 1500
 
 
 def get_settings() -> Settings:
@@ -78,4 +80,6 @@ def get_settings() -> Settings:
         api_url=os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/"),
         falkordb_url=os.getenv("FALKORDB_URL", "").strip(),
         falkordb_graph=(os.getenv("FALKORDB_GRAPH") or "hackeval").strip(),
+        strict_scoring=os.getenv("STRICT_SCORING", "true").strip().lower() not in ("0", "false", "no", "off"),
+        strict_min_chars=int(os.getenv("STRICT_MIN_CHARS", "1500")),
     )

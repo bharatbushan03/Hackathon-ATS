@@ -84,17 +84,18 @@ class DocumentEvaluationResult(BaseModel):
     evidence_checked: int = 0
     evidence_verified: int = 0
     evidence: list[EvidenceQuote] = Field(default_factory=list)
+    adjustments: list[str] = Field(default_factory=list)  # strict-scoring caps/penalties applied in code
     char_count: int = 0
     truncated: bool = False
     elapsed_seconds: float = 0.0
     errors: list[str] = Field(default_factory=list)
 
 
+VERDICT_THRESHOLDS = (("Excellent", 85), ("Strong", 70), ("Promising", 55))
+
+
 def verdict_for(total: float) -> str:
-    if total >= 80:
-        return "Excellent"
-    if total >= 65:
-        return "Strong"
-    if total >= 50:
-        return "Promising"
+    for name, floor in VERDICT_THRESHOLDS:
+        if total >= floor:
+            return name
     return "Needs Improvement"

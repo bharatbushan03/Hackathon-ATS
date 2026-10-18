@@ -10,7 +10,7 @@ from hackeval.agents import AGENTS
 from hackeval.schemas import CRITERIA_WEIGHTS, AgentReport, CriterionScore, FinalEvaluation
 
 LONG = ("Our platform helps rural farmers predict crop disease using on-device computer vision. "
-        "The architecture uses a quantized MobileNet model and a FastAPI sync service. ") * 3
+        "The architecture uses a quantized MobileNet model and a FastAPI sync service. ") * 12
 
 
 class FakeLLM:

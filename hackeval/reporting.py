@@ -107,15 +107,15 @@ def build_excel(results: list[DocumentEvaluationResult], out_path: Path, run_id:
 
     ws2 = wb.create_sheet("Details")
     hdr2 = ["File", "Project", "Total (/100)", "Summary", "Strengths", "Weaknesses", "Recommendations",
-            "Score Justifications", "Evidence Verified", "Truncated", "Elapsed (s)"]
+            "Score Justifications", "Evidence Verified", "Strict Adjustments", "Truncated", "Elapsed (s)"]
     rows2 = []
     for r in ranked:
         just = "\n".join(f"{CRITERIA_LABELS[c]}: {t}" for c, t in r.criterion_justifications.items())
         ev = f"{r.evidence_verified}/{r.evidence_checked}" if r.evidence_checked else "n/a"
         rows2.append([r.file_name, r.project_title, r.total_score, r.summary, _join(r.strengths),
-                      _join(r.weaknesses), _join(r.recommendations), just, ev,
+                      _join(r.weaknesses), _join(r.recommendations), just, ev, _join(r.adjustments),
                       "yes" if r.truncated else "no", r.elapsed_seconds])
-    _sheet(ws2, hdr2, rows2, [36, 28, 12, 50, 45, 45, 50, 60, 12, 10, 10])
+    _sheet(ws2, hdr2, rows2, [36, 28, 12, 50, 45, 45, 50, 60, 12, 45, 10, 10])
 
     issues = [[r.file_name, r.status, _join(r.errors)] for r in ranked if r.errors or r.status in ("failed", "skipped")]
     ws3 = wb.create_sheet("Issues")
