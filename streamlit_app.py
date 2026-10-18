@@ -18,8 +18,17 @@ st.markdown(
     "Each document is scored independently by three specialist agents "
     "(Problem & Innovation, Technical, Impact & Presentation). A fourth agent moderates their "
     "outputs into a final evaluation. Totals are computed in code from a weighted rubric. "
-    "Download the ranked Excel report when processing finishes."
+    "Download the ranked Excel report when processing finishes. With FalkorDB configured, every "
+    "submission, score, evidence quote and insight is also stored as a graph you can query in Cypher."
 )
+
+
+def graph_status() -> dict:
+    try:
+        return requests.get(f"{API_URL}/graph/status", timeout=5).json()
+    except Exception as e:  # noqa: BLE001
+        return {"enabled": False, "connected": False, "error": str(e)}
+
 
 with st.sidebar:
     st.subheader("Backend")
@@ -30,6 +39,17 @@ with st.sidebar:
         st.success(f"Connected: {h['provider']} / {h['model']}" + (f" (+ {extra})" if extra else ""))
     except Exception:
         st.error(f"API unreachable at {API_URL}")
+    st.subheader("Graph store (FalkorDB)")
+    gs = graph_status()
+    if not gs.get("enabled"):
+        st.caption("Disabled. Set FALKORDB_URL on the API to store evaluations as a graph.")
+    elif gs.get("connected"):
+        n = gs.get("nodes", {})
+        st.success(f"Connected: {gs.get('url')} / graph `{gs.get('graph')}`")
+        st.caption(f"{n.get('run', 0)} runs · {n.get('submission', 0)} submissions · "
+                   f"{n.get('evidence', 0)} evidence quotes · {n.get('insight', 0)} insights")
+    else:
+        st.error(f"FalkorDB unreachable: {gs.get('error', 'unknown error')}")
 
 for k, v in {"job_id": None, "report": None, "final": None}.items():
     st.session_state.setdefault(k, v)
@@ -131,3 +151,28 @@ if st.session_state.final:
         with st.expander("Skipped files"):
             for s in st.session_state.final["skipped"]:
                 st.write(s)
+
+if gs.get("connected"):
+    st.divider()
+    st.subheader("Graph Explorer")
+    st.caption(
+        "Evaluations live in FalkorDB as `(:Run)-[:EVALUATED]->(:Submission)-[:SCORED]->(:Criterion)`, "
+        "with `(:Evidence)` quotes (verified flag) and `(:Insight)` strengths / weaknesses / recommendations. "
+        "Queries run read-only."
+    )
+    samples = gs.get("sample_queries") or {}
+    pick = st.selectbox("Sample query", ["Custom"] + list(samples))
+    default = samples.get(pick, st.session_state.get("cypher", ""))
+    cypher = st.text_area("Cypher", value=default, height=120, key=f"cypher_{pick}")
+    if st.button("Run query", disabled=not cypher.strip()):
+        try:
+            resp = requests.post(f"{API_URL}/graph/query", json={"cypher": cypher}, timeout=60)
+            if resp.status_code != 200:
+                st.error(resp.json().get("detail", resp.text))
+            else:
+                rows = resp.json()["results"]
+                st.caption(f"{len(rows)} row(s)")
+                if rows:
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Cannot reach API: {e}")

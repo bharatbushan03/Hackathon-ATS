@@ -6,12 +6,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .config import get_settings
 from .drive import create_folder_zip, parse_folder_url
+from .graphstore import SAMPLE_QUERIES, GraphStore, GraphStoreError, open_graph_store, redact_url
 from .ingestion import IngestionError
 from .llm import build_llms
 from .service import run_evaluation
@@ -63,7 +64,8 @@ def _worker(job_id: str, zip_path: Path | None, job_dir: Path, folder_url: str |
 @app.get("/health")
 def health() -> dict:
     s = get_settings()
-    return {"status": "ok", "provider": s.llm_provider, "model": s.llm_model, "models": s.agent_models}
+    return {"status": "ok", "provider": s.llm_provider, "model": s.llm_model, "models": s.agent_models,
+            "graph_store": "falkordb" if s.falkordb_url else None}
 
 
 class DriveJobRequest(BaseModel):
@@ -146,3 +148,68 @@ def full_csv():
     if not p.exists():
         raise HTTPException(404, "No evaluations recorded yet.")
     return FileResponse(p, filename="evaluation.csv", media_type="text/csv")
+
+
+# ---------------- FalkorDB graph store ----------------
+
+def _graph() -> GraphStore:
+    s = get_settings()
+    if not s.falkordb_url:
+        raise HTTPException(503, "Set FALKORDB_URL to enable the graph store.")
+    try:
+        store = open_graph_store(s)
+    except GraphStoreError as e:
+        raise HTTPException(503, str(e)) from e
+    assert store is not None
+    return store
+
+
+class GraphQueryRequest(BaseModel):
+    cypher: str = Field(description="Read-only Cypher query (executed with GRAPH.RO_QUERY).")
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.get("/graph/status")
+def graph_status() -> dict:
+    s = get_settings()
+    if not s.falkordb_url:
+        return {"enabled": False, "connected": False, "graph": s.falkordb_graph, "url": ""}
+    try:
+        store = open_graph_store(s)
+        assert store is not None
+        return {"enabled": True, "connected": True, **store.stats(), "sample_queries": SAMPLE_QUERIES}
+    except Exception as e:  # noqa: BLE001
+        return {"enabled": True, "connected": False, "graph": s.falkordb_graph,
+                "url": redact_url(s.falkordb_url), "error": str(e)}
+
+
+@app.get("/graph/leaderboard")
+def graph_leaderboard(run_id: str | None = None, limit: int = Query(50, ge=1, le=500)) -> dict:
+    store = _graph()
+    try:
+        rows = store.leaderboard(run_id=run_id, limit=limit)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Graph query failed: {e}") from e
+    return {"run_id": run_id, "count": len(rows), "results": rows}
+
+
+@app.get("/graph/submissions/{submission_id:path}")
+def graph_submission(submission_id: str) -> dict:
+    store = _graph()
+    try:
+        row = store.submission(submission_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Graph query failed: {e}") from e
+    if row is None:
+        raise HTTPException(404, "Unknown submission.")
+    return row
+
+
+@app.post("/graph/query")
+def graph_query(request: GraphQueryRequest) -> dict:
+    store = _graph()
+    try:
+        rows = store.ro_query(request.cypher, request.params)
+    except GraphStoreError as e:
+        raise HTTPException(400, f"Cypher error: {e}") from e
+    return {"count": len(rows), "results": rows}

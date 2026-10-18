@@ -8,12 +8,13 @@ from typing import Callable, Optional
 
 from pydantic import BaseModel
 
-from .agents import total_score, verify_evidence
+from .agents import evidence_quotes, total_score
 from .config import Settings
 from .graph import build_graph
+from .graphstore import GraphStore, GraphStoreError, open_graph_store
 from .ingestion import IngestionError, extract_zip, parse_document
 from .reporting import append_to_csv, build_excel
-from .schemas import CRITERIA_WEIGHTS, DocumentEvaluationResult, verdict_for
+from .schemas import DocumentEvaluationResult, verdict_for
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,8 @@ def _assemble(state: dict, doc, elapsed: float) -> DocumentEvaluationResult:
     )
     if fin is None:
         return DocumentEvaluationResult(status="failed", **base)
-    reports = [state[k] for k in ("problem_innovation", "technical", "impact_presentation") if state.get(k)]
-    verified, checked = verify_evidence(doc.text, reports)
+    reports = {k: state.get(k) for k in ("problem_innovation", "technical", "impact_presentation")}
+    quotes = evidence_quotes(doc.text, reports)
     total = total_score(fin.criteria)
     return DocumentEvaluationResult(
         status="partial" if errors else "completed",
@@ -49,8 +50,26 @@ def _assemble(state: dict, doc, elapsed: float) -> DocumentEvaluationResult:
         criterion_justifications={c.criterion: c.justification for c in fin.criteria},
         summary=fin.summary, strengths=fin.strengths, weaknesses=fin.weaknesses,
         recommendations=fin.recommendations,
-        evidence_checked=checked, evidence_verified=verified, **base,
+        evidence_checked=len(quotes), evidence_verified=sum(q.verified for q in quotes), evidence=quotes, **base,
     )
+
+
+def _open_store(settings: Settings) -> Optional[GraphStore]:
+    try:
+        return open_graph_store(settings)
+    except GraphStoreError as e:
+        logger.warning("Graph store disabled for this run: %s", e)
+        return None
+
+
+def _store_in_graph(store: Optional[GraphStore], run_id: str, res: DocumentEvaluationResult) -> None:
+    if store is None:
+        return
+    try:
+        store.store_result(run_id, res)
+    except Exception as e:  # noqa: BLE001 - graph persistence must never fail an evaluation
+        logger.warning("FalkorDB write failed for %s: %s", res.file_name, e)
+        res.errors.append(f"Graph store: {e}")
 
 
 def run_evaluation(
@@ -61,12 +80,18 @@ def run_evaluation(
     run_id: Optional[str] = None,
     on_progress: Optional[ProgressCB] = None,
     on_result: Optional[Callable[[DocumentEvaluationResult], None]] = None,
+    graph_store: Optional[GraphStore] = None,
 ) -> RunSummary:
-    """Process every document in the ZIP independently (fresh graph state per document)."""
+    """Process every document in the ZIP independently (fresh graph state per document).
+
+    Results are appended to the CSV and, when FALKORDB_URL is configured (or ``graph_store`` is
+    passed), written to the FalkorDB graph as well.
+    """
     run_id = run_id or uuid.uuid4().hex[:12]
     job_dir = Path(job_dir)
     extraction = extract_zip(zip_path, job_dir / "extracted", settings)
     graph = build_graph(llm, settings)
+    store = graph_store if graph_store is not None else _open_store(settings)
     total = len(extraction.files)
     results: list[DocumentEvaluationResult] = []
 
@@ -94,6 +119,7 @@ def run_evaluation(
                 logger.exception("Graph failure for %s", ef.original_name)
                 state = {"final": None, "errors": [f"Workflow error: {e}"]}
             res = _assemble(state, doc, time.time() - t0)
+        _store_in_graph(store, run_id, res)
         append_to_csv(res, run_id, settings.csv_path)
         results.append(res)
         if on_result:
@@ -102,8 +128,9 @@ def run_evaluation(
             on_progress(i + 1, total, ef.original_name)
 
     for s in extraction.skipped:
-        results.append(DocumentEvaluationResult(
-            file_name=s.split(":")[0], file_type="", status="skipped", errors=[s]))
+        res = DocumentEvaluationResult(file_name=s.split(":")[0], file_type="", status="skipped", errors=[s])
+        _store_in_graph(store, run_id, res)
+        results.append(res)
 
     report = build_excel(results, job_dir / f"hackathon_evaluation_{run_id}.xlsx", run_id)
     return RunSummary(

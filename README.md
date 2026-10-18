@@ -11,6 +11,7 @@ START -> [Problem & Innovation | Technical | Impact & Presentation]  (parallel) 
 - Total (/100) and verdict are computed in code from fixed weights, not by the LLM.
 - Evidence quotes are checked verbatim against the document text (reported as verified/checked).
 - Every result is appended to `data/evaluation.csv` (header created if missing).
+- Optional [FalkorDB](https://www.falkordb.com/) graph store: submissions, scores, evidence quotes and insights are written as a graph and can be queried with Cypher (see below).
 - Output: ranked Excel report (Leaderboard, Details, Issues, Rubric).
 - Failures are isolated: bad file -> `failed`; one agent down -> `partial`; unsupported file -> `skipped`.
 
@@ -41,6 +42,34 @@ To evaluate a Drive folder, enable the Google Drive API in Google Cloud, set `GO
 
 Other providers: `openai`, `anthropic`, `google` (needs `langchain-google-genai`), `ollama` (needs `langchain-ollama`).
 
+## FalkorDB graph store (optional)
+Set `FALKORDB_URL` (e.g. `falkor://localhost:6379`, `falkor://user:pass@host:6379`, `falkors://…` for TLS) and optionally `FALKORDB_GRAPH` (default `hackeval`). Every evaluated document is then also written to FalkorDB:
+
+```
+(:Run {id})-[:EVALUATED]->(:Submission {id, file_name, project_title, total_score, verdict, status, …})
+(:Submission)-[:OF_PROJECT]->(:Project {name})
+(:Submission)-[:SCORED {score, justification}]->(:Criterion {id, label, weight})
+(:Submission)-[:CITES]->(:Evidence {quote, verified, agent})-[:SUPPORTS]->(:Criterion)
+(:Submission)-[:HAS_STRENGTH|HAS_WEAKNESS|HAS_RECOMMENDATION]->(:Insight {kind, text})
+```
+
+- `Submission.id` is `<run_id>:<file_name>`; re-evaluating the same file in the same run replaces its sub-graph.
+- Graph writes never fail an evaluation: if FalkorDB is down the run completes and the document gets a `Graph store: …` error note.
+- The Streamlit sidebar shows the graph status and a **Graph Explorer** panel runs read-only Cypher (with sample queries: leaderboard across runs, average per criterion, weakest criterion, unverified evidence, most common weaknesses, projects seen in several runs).
+
+Quick start with Docker: `docker run -p 6379:6379 -p 3000:3000 falkordb/falkordb` (FalkorDB Browser at http://localhost:3000), then set `FALKORDB_URL=falkor://localhost:6379`. `docker compose up --build` starts FalkorDB and the evaluator together.
+
+Example queries:
+```cypher
+// Cross-run leaderboard
+MATCH (r:Run)-[:EVALUATED]->(s:Submission) WHERE s.total_score IS NOT NULL
+RETURN r.id, s.file_name, s.total_score, s.verdict ORDER BY s.total_score DESC LIMIT 10
+
+// Evidence quotes the judges cited but that were not found verbatim in the document
+MATCH (s:Submission)-[:CITES]->(e:Evidence {verified: false})-[:SUPPORTS]->(c:Criterion)
+RETURN s.file_name, c.label, e.agent, e.quote
+```
+
 ## API
 - `POST /jobs` (multipart `file`=zip) -> `{job_id}`
 - `POST /jobs/drive` (`{"folder_url": "https://drive.google.com/drive/folders/..."}`) -> `{job_id}`
@@ -48,12 +77,16 @@ Other providers: `openai`, `anthropic`, `google` (needs `langchain-google-genai`
 - `GET /jobs/{id}/report` -> Excel file
 - `GET /evaluation.csv` -> cumulative CSV
 - `GET /health`
+- `GET /graph/status` -> FalkorDB connection state, node counts, sample queries
+- `GET /graph/leaderboard?run_id=&limit=` -> ranked submissions from the graph (all runs by default)
+- `GET /graph/submissions/{run_id}:{file_name}` -> one submission with scores, evidence and insights
+- `POST /graph/query` (`{"cypher": "...", "params": {}}`) -> read-only Cypher (`GRAPH.RO_QUERY`; writes are rejected)
 
 ## Tests
 ```bash
 pytest -q
 ```
-Uses a fake LLM. No API key needed.
+Uses a fake LLM. No API key needed. Graph-store tests use a fake graph; to also run them against a live server: `FALKORDB_TEST_URL=falkor://localhost:6379 pytest -q`.
 
 ## Limits and known gaps
 - Scanned/image-only PDFs have no extractable text and are marked failed (no OCR).
