@@ -36,7 +36,7 @@ UI: http://localhost:8501
 ## Configuration
 See `.env.example`. Default provider is Azure OpenAI. Set one `AZURE_OPENAI_API_KEY` and one project/resource URL (`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_PROJECT_URL`, or `FOUNDRY_PROJECT_ENDPOINT`). That pair is used for every deployment in the project.
 
-To evaluate a Drive folder, the person submitting the link enters their own Google Drive API key in the UI (create it in Google Cloud with the Drive API enabled) and shares the folder as “Anyone with the link” (Viewer). The key is used only for that job and is never stored. `GOOGLE_DRIVE_API_KEY` is an optional server-side fallback for API clients that omit `api_key`. Drive folder enumeration uses the [Drive API's public-folder listing](https://developers.google.com/workspace/drive/api/guides/search-files). The API key is only needed for Drive jobs; ZIP uploads work without it. Private Drive folders require an authenticated connection and are not supported yet.
+To evaluate a Drive folder, the person submitting the link enters their own Google Drive API key in the UI (create it in Google Cloud with the Drive API enabled) and shares the folder as “Anyone with the link” (Viewer). The key is used only for that job and is never stored; there is no server-side Drive key. Drive folder enumeration uses the [Drive API's public-folder listing](https://developers.google.com/workspace/drive/api/guides/search-files). ZIP uploads need no key. Private Drive folders require an authenticated connection and are not supported yet.
 
 `LLM_MODEL` is the default deployment name. Optional per-agent overrides (same key + URL): `LLM_MODEL_PROBLEM_INNOVATION`, `LLM_MODEL_TECHNICAL`, `LLM_MODEL_IMPACT_PRESENTATION`, `LLM_MODEL_FINAL`. Each name must match a deployment in that project and support structured output / tool calling.
 
@@ -72,7 +72,7 @@ RETURN s.file_name, c.label, e.agent, e.quote
 
 ## API
 - `POST /jobs` (multipart `file`=zip) -> `{job_id}`
-- `POST /jobs/drive` (`{"folder_url": "https://drive.google.com/drive/folders/...", "api_key": "<uploader's Drive API key>"}`) -> `{job_id}`
+- `POST /jobs/drive` (`{"folder_url": "https://drive.google.com/drive/folders/...", "api_key": "<uploader's Drive API key>"}`, both required) -> `{job_id}`
 - `GET /jobs/{id}` -> status, progress, per-document results
 - `GET /jobs/{id}/report` -> Excel file
 - `GET /evaluation.csv` -> cumulative CSV

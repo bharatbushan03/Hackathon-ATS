@@ -43,7 +43,6 @@ class Settings:
     data_dir: Path
     csv_path: Path
     api_url: str
-    google_drive_api_key: str = ""
     falkordb_url: str = ""
     falkordb_graph: str = "hackeval"
 
@@ -77,7 +76,6 @@ def get_settings() -> Settings:
         data_dir=data_dir,
         csv_path=Path(os.getenv("CSV_PATH", str(data_dir / "evaluation.csv"))).resolve(),
         api_url=os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/"),
-        google_drive_api_key=os.getenv("GOOGLE_DRIVE_API_KEY", "").strip(),
         falkordb_url=os.getenv("FALKORDB_URL", "").strip(),
         falkordb_graph=(os.getenv("FALKORDB_GRAPH") or "hackeval").strip(),
     )
