@@ -15,6 +15,7 @@ uvicorn>=0.29
 python-multipart>=0.0.9
 streamlit>=1.35
 requests>=2.31
+falkordb>=1.0,<2
 python-dotenv>=1.0
 pytest>=8.0
 httpx>=0.27

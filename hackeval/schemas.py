@@ -57,6 +57,15 @@ class FinalEvaluation(BaseModel):
     recommendations: list[str]
 
 
+class EvidenceQuote(BaseModel):
+    """One evidence quote cited by an agent, checked verbatim against the document."""
+
+    criterion: str
+    quote: str
+    agent: str
+    verified: bool
+
+
 class DocumentEvaluationResult(BaseModel):
     """Final, code-assembled result for one document."""
 
@@ -74,6 +83,7 @@ class DocumentEvaluationResult(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
     evidence_checked: int = 0
     evidence_verified: int = 0
+    evidence: list[EvidenceQuote] = Field(default_factory=list)
     char_count: int = 0
     truncated: bool = False
     elapsed_seconds: float = 0.0

@@ -1,0 +1,27 @@
+# Local stack: FalkorDB graph store + evaluator (API :8001 inside the container, UI on :8000).
+#   docker compose up --build
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379"   # Redis protocol (FalkorDB)
+      - "3000:3000"   # FalkorDB Browser UI
+    volumes:
+      - falkordb_data:/var/lib/falkordb/data
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      FALKORDB_URL: falkor://falkordb:6379
+      FALKORDB_GRAPH: hackeval
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_data:/home/data
+    depends_on:
+      - falkordb
+
+volumes:
+  falkordb_data:
+  app_data:

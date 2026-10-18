@@ -14,6 +14,7 @@ from .schemas import (
     CRITERIA_LABELS,
     CRITERIA_WEIGHTS,
     AgentReport,
+    EvidenceQuote,
     FinalEvaluation,
 )
 
@@ -185,20 +186,27 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s.replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')).strip().lower()
 
 
-def verify_evidence(doc_text: str, reports: list[AgentReport]) -> tuple[int, int]:
-    """Return (verified, checked). Quotes not found verbatim in the document are unverified."""
+def evidence_quotes(doc_text: str, reports: dict[str, AgentReport | None]) -> list[EvidenceQuote]:
+    """Every checkable quote from the specialist reports, flagged verified if found verbatim in the document."""
     hay = _norm(doc_text)
-    checked = verified = 0
-    for r in reports:
+    out: list[EvidenceQuote] = []
+    for agent_id, r in reports.items():
+        if r is None:
+            continue
         for c in r.criteria:
             for q in c.evidence:
                 frags = [f for f in re.split(r"\.\.\.|\u2026", q) if len(f.strip()) >= 8]
                 if not frags:
                     continue
-                checked += 1
-                if all(_norm(f).strip(" \"'") in hay for f in frags):
-                    verified += 1
-    return verified, checked
+                ok = all(_norm(f).strip(" \"'") in hay for f in frags)
+                out.append(EvidenceQuote(criterion=c.criterion, quote=q.strip(), agent=agent_id, verified=ok))
+    return out
+
+
+def verify_evidence(doc_text: str, reports: list[AgentReport]) -> tuple[int, int]:
+    """Return (verified, checked). Quotes not found verbatim in the document are unverified."""
+    quotes = evidence_quotes(doc_text, {str(i): r for i, r in enumerate(reports)})
+    return sum(q.verified for q in quotes), len(quotes)
 
 
 def label(c: str) -> str:
