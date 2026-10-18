@@ -31,13 +31,14 @@ def _update(job_id: str, **kw) -> None:
         JOBS[job_id].update(kw)
 
 
-def _worker(job_id: str, zip_path: Path | None, job_dir: Path, folder_url: str | None = None) -> None:
+def _worker(job_id: str, zip_path: Path | None, job_dir: Path, folder_url: str | None = None,
+            drive_api_key: str = "") -> None:
     settings = get_settings()
     _update(job_id, status="running")
     try:
         if folder_url:
             _update(job_id, current="Downloading Google Drive folder")
-            zip_path = create_folder_zip(folder_url, job_dir / "drive_upload.zip", settings)
+            zip_path = create_folder_zip(folder_url, job_dir / "drive_upload.zip", settings, drive_api_key)
         if zip_path is None:
             raise IngestionError("No submission source was provided.")
         llm = build_llms(settings)
@@ -70,6 +71,7 @@ def health() -> dict:
 
 class DriveJobRequest(BaseModel):
     folder_url: str
+    api_key: str = ""  # the uploader's own Google Drive API key; falls back to GOOGLE_DRIVE_API_KEY
 
 
 @app.post("/jobs")
@@ -100,8 +102,9 @@ async def create_job(file: UploadFile = File(...)) -> dict:
 @app.post("/jobs/drive")
 def create_drive_job(request: DriveJobRequest) -> dict:
     s = get_settings()
-    if not s.google_drive_api_key:
-        raise HTTPException(503, "Set GOOGLE_DRIVE_API_KEY to enable Google Drive folder evaluation.")
+    api_key = request.api_key.strip() or s.google_drive_api_key
+    if not api_key:
+        raise HTTPException(400, "Enter your Google Drive API key to evaluate a Drive folder.")
     try:
         parse_folder_url(request.folder_url)
     except IngestionError as e:
@@ -112,7 +115,7 @@ def create_drive_job(request: DriveJobRequest) -> dict:
     with _LOCK:
         JOBS[job_id] = dict(job_id=job_id, status="queued", done=0, total=0, current="",
                             results=[], skipped=[], error=None, report_path=None)
-    threading.Thread(target=_worker, args=(job_id, None, job_dir, request.folder_url), daemon=True).start()
+    threading.Thread(target=_worker, args=(job_id, None, job_dir, request.folder_url, api_key), daemon=True).start()
     return {"job_id": job_id}
 
 
