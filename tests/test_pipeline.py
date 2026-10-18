@@ -14,7 +14,7 @@ def test_full_pipeline(tmp_path, settings):
     s = run_evaluation(_zip(tmp_path), tmp_path / "job", settings, llm, run_id="t1")
     by = {r.file_name: r for r in s.results}
     assert by["a.pdf"].status == "completed" and by["a.pdf"].total_score == 80.0
-    assert by["a.pdf"].verdict == "Excellent"
+    assert by["a.pdf"].verdict == "Strong" and by["a.pdf"].adjustments == []
     assert by["a.pdf"].evidence_verified == by["a.pdf"].evidence_checked == 6
     assert by["broken.pdf"].status == "failed"
     assert by["skip.txt"].status == "skipped"
@@ -29,7 +29,9 @@ def test_partial_when_one_agent_fails(tmp_path, settings):
     z = make_zip(tmp_path / "in.zip", {"a.pdf": make_pdf()})
     s = run_evaluation(z, tmp_path / "job", settings, FakeLLM(fail_agents={"technical"}), run_id="t2")
     r = s.results[0]
-    assert r.status == "partial" and r.total_score == 80.0
+    # technical specialist failed -> technical_depth/completeness have no verified evidence -> capped at 4
+    assert r.status == "partial" and r.total_score == 66.0
+    assert r.criterion_scores["technical_depth"] == 4.0 and len(r.adjustments) == 2
     assert any("Technical" in e for e in r.errors)
 
 

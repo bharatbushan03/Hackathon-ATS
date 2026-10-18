@@ -17,7 +17,14 @@ START -> [Problem & Innovation | Technical | Impact & Presentation]  (parallel) 
 
 ## Rubric (weights)
 Problem Clarity 15, Innovation 20, Technical Depth 25, Completeness 10, Impact & Viability 20, Presentation Quality 10.
-Verdict: >=80 Excellent, >=65 Strong, >=50 Promising, else Needs Improvement.
+Verdict: >=85 Excellent, >=70 Strong, >=55 Promising, else Needs Improvement.
+
+### Strict scoring (default on)
+Scores are evidence-gated in code after the LLM pass, so a deck cannot score well on claims alone:
+- a criterion with **no verbatim quote found in the document** is capped at 4/10; if quotes were cited but none exist in the document it is capped at 3/10;
+- if fewer than half of all cited quotes are verified, every criterion loses 1 point (evidence-integrity penalty);
+- submissions shorter than `STRICT_MIN_CHARS` (default 1500 characters of extracted text) are capped at 5/10 on every criterion.
+Every cap/penalty is listed under *Strict adjustments* in the UI, the Excel Details sheet and the graph. Set `STRICT_SCORING=false` to disable.
 
 ## Run
 ```bash

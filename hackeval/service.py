@@ -8,7 +8,7 @@ from typing import Callable, Optional
 
 from pydantic import BaseModel
 
-from .agents import evidence_quotes, total_score
+from .agents import apply_strict_scoring, evidence_quotes, total_score
 from .config import Settings
 from .graph import build_graph
 from .graphstore import GraphStore, GraphStoreError, open_graph_store
@@ -29,7 +29,7 @@ class RunSummary(BaseModel):
     csv_path: str
 
 
-def _assemble(state: dict, doc, elapsed: float) -> DocumentEvaluationResult:
+def _assemble(state: dict, doc, elapsed: float, settings: Settings) -> DocumentEvaluationResult:
     errors = list(state.get("errors", []))
     fin = state.get("final")
     base = dict(
@@ -39,18 +39,22 @@ def _assemble(state: dict, doc, elapsed: float) -> DocumentEvaluationResult:
     if fin is None:
         return DocumentEvaluationResult(status="failed", **base)
     reports = {k: state.get(k) for k in ("problem_innovation", "technical", "impact_presentation")}
-    quotes = evidence_quotes(doc.text, reports)
-    total = total_score(fin.criteria)
+    quotes = evidence_quotes(doc.text, {**reports, "final": fin})
+    criteria, adjustments = list(fin.criteria), []
+    if settings.strict_scoring:
+        criteria, adjustments = apply_strict_scoring(criteria, quotes, doc.char_count, settings.strict_min_chars)
+    total = total_score(criteria)
     return DocumentEvaluationResult(
         status="partial" if errors else "completed",
         project_title=fin.project_title,
         total_score=total,
         verdict=verdict_for(total),
-        criterion_scores={c.criterion: round(c.score, 1) for c in fin.criteria},
-        criterion_justifications={c.criterion: c.justification for c in fin.criteria},
+        criterion_scores={c.criterion: round(c.score, 1) for c in criteria},
+        criterion_justifications={c.criterion: c.justification for c in criteria},
         summary=fin.summary, strengths=fin.strengths, weaknesses=fin.weaknesses,
         recommendations=fin.recommendations,
-        evidence_checked=len(quotes), evidence_verified=sum(q.verified for q in quotes), evidence=quotes, **base,
+        evidence_checked=len(quotes), evidence_verified=sum(q.verified for q in quotes), evidence=quotes,
+        adjustments=adjustments, **base,
     )
 
 
@@ -118,7 +122,7 @@ def run_evaluation(
             except Exception as e:  # noqa: BLE001
                 logger.exception("Graph failure for %s", ef.original_name)
                 state = {"final": None, "errors": [f"Workflow error: {e}"]}
-            res = _assemble(state, doc, time.time() - t0)
+            res = _assemble(state, doc, time.time() - t0, settings)
         _store_in_graph(store, run_id, res)
         append_to_csv(res, run_id, settings.csv_path)
         results.append(res)
