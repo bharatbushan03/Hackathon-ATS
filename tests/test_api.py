@@ -27,15 +27,15 @@ def test_api_flow(tmp_path, settings, monkeypatch):
 def test_drive_job_requires_uploader_api_key(settings, monkeypatch):
     seen = {}
 
-    def fake_zip(folder_url, zip_path, s, api_key=""):
+    def fake_zip(folder_url, zip_path, s, api_key):
         seen["key"] = api_key
         raise api.IngestionError("stop here")
 
     monkeypatch.setattr(api, "create_folder_zip", fake_zip)
-    monkeypatch.delenv("GOOGLE_DRIVE_API_KEY", raising=False)
     c = TestClient(api.app)
     url = "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz"
-    assert c.post("/jobs/drive", json={"folder_url": url}).status_code == 400
+    assert c.post("/jobs/drive", json={"folder_url": url}).status_code == 422
+    assert c.post("/jobs/drive", json={"folder_url": url, "api_key": "  "}).status_code == 400
     jid = c.post("/jobs/drive", json={"folder_url": url, "api_key": "user-key"}).json()["job_id"]
     for _ in range(50):
         j = c.get(f"/jobs/{jid}").json()

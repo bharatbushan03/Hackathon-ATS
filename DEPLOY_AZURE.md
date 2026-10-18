@@ -41,7 +41,6 @@ az webapp config appsettings set -g $RG -n $APP --settings `
   LLM_MODEL=<your-deployment-name> `
   AZURE_OPENAI_ENDPOINT=<your-endpoint-url> `
   AZURE_OPENAI_API_KEY=<your-key>
-# Add GOOGLE_DRIVE_API_KEY=<your-drive-api-key> to that command when enabling Drive folders.
 az webapp config set -g $RG -n $APP --web-sockets-enabled true --always-on true
 az webapp restart -g $RG -n $APP
 ```

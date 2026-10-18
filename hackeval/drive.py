@@ -106,12 +106,12 @@ def _items(folder_id: str, resource_key: str | None, api_key: str):
                 break
 
 
-def create_folder_zip(folder_url: str, zip_path: Path, settings: Settings, api_key: str = "") -> Path:
+def create_folder_zip(folder_url: str, zip_path: Path, settings: Settings, api_key: str) -> Path:
     """Download every supported document in a public Drive folder tree into a ZIP.
 
-    `api_key` is the uploader's own Google Drive API key; it falls back to GOOGLE_DRIVE_API_KEY.
+    `api_key` is the uploader's own Google Drive API key, supplied with the job.
     """
-    api_key = (api_key or settings.google_drive_api_key or "").strip()
+    api_key = (api_key or "").strip()
     if not api_key:
         raise IngestionError("A Google Drive API key is required to evaluate a Drive folder.")
     folder_id, resource_key = parse_folder_url(folder_url)

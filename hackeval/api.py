@@ -71,7 +71,7 @@ def health() -> dict:
 
 class DriveJobRequest(BaseModel):
     folder_url: str
-    api_key: str = ""  # the uploader's own Google Drive API key; falls back to GOOGLE_DRIVE_API_KEY
+    api_key: str  # the uploader's own Google Drive API key; used for this job only, never stored
 
 
 @app.post("/jobs")
@@ -102,7 +102,7 @@ async def create_job(file: UploadFile = File(...)) -> dict:
 @app.post("/jobs/drive")
 def create_drive_job(request: DriveJobRequest) -> dict:
     s = get_settings()
-    api_key = request.api_key.strip() or s.google_drive_api_key
+    api_key = request.api_key.strip()
     if not api_key:
         raise HTTPException(400, "Enter your Google Drive API key to evaluate a Drive folder.")
     try:
